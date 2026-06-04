@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+llama-index
+llama-index-vector-stores-postgres
+openai
+psycopg2-binary
+python-multipart
+pypdf
+python-docx
+python-dotenv
+python-docx
+python-pptx
+langsmith
+langchain-core

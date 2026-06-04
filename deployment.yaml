@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: resume-rag
+
+spec:
+  replicas: 2
+
+  selector:
+    matchLabels:
+      app: resume-rag
+
+  template:
+    metadata:
+      labels:
+        app: resume-rag
+
+    spec:
+      containers:
+
+      - name: resume-rag
+
+        image: us-central1-docker.pkg.dev/enterprise-ai-platform-497117/expense-repo/resume-rag:latest
+
+        ports:
+        - containerPort: 8080
+
+        env:
+
+        - name: DB_HOST
+          valueFrom:
+            secretKeyRef:
+              name: rag-secret
+              key: DB_HOST
+
+        - name: DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: rag-secret
+              key: DB_NAME
+
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: rag-secret
+              key: DB_USER
+
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: rag-secret
+              key: DB_PASSWORD
+
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: rag-secret
+              key: OPENAI_API_KEY
