@@ -18,3 +18,4 @@ checkpoints/
 data/
 
 .DS_Store
+testenv/

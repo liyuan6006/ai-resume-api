@@ -19,10 +19,8 @@ async def ask_question(
     request: AskRequest
 ):
 
-    answer = rag_service.ask(
+    # ask() now returns {"answer": str, "sources": [...]} so the response
+    # carries citation metadata alongside the answer.
+    return rag_service.ask(
         request.question
     )
-
-    return {
-        "answer": answer
-    }
