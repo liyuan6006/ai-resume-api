@@ -12,11 +12,19 @@ from langchain_experimental.text_splitter import SemanticChunker
 from langchain_openai import OpenAIEmbeddings
 from langchain_postgres import PGVector
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langsmith import traceable
+from langsmith.run_helpers import get_current_run_tree
 
 
 # --- Configuration -----------------------------------------------------------
 
 EMBEDDING_MODEL = "text-embedding-3-small"
+
+# Length of each embedding vector. MUST match what rag_service.py uses at query
+# time, or retrieval won't be able to compare the stored vectors against the
+# question. 1536 is the native size for text-embedding-3-small. Changing this
+# requires re-ingesting every document.
+EMBEDDING_DIMENSIONS = 1536
 
 # Semantic chunking splits where the *meaning* changes rather than at a fixed
 # length. "percentile" flags a breakpoint whenever the similarity gap between
@@ -49,6 +57,7 @@ class IngestionService:
     """Loads a document, splits it into chunks, embeds them and stores the
     vectors in Postgres — all through LangChain."""
 
+    @traceable
     def get_file_metadata(self, file_path: str) -> dict:
         """Metadata attached to every chunk so we can trace it back later."""
         path = Path(file_path)
@@ -65,6 +74,7 @@ class IngestionService:
 
         return text.replace("\x00", "").strip()
 
+    @traceable
     def load_documents(self, file_path: str) -> list[Document]:
         """Pick the right LangChain loader for the file type and load it."""
         extension = Path(file_path).suffix.lower()
@@ -75,6 +85,7 @@ class IngestionService:
 
         return loader_factory(file_path).load()
 
+    @traceable
     def split_documents(
         self,
         documents: list[Document],
@@ -118,10 +129,15 @@ class IngestionService:
 
         return clean_chunks
 
+    @traceable
     def create_embeddings(self) -> OpenAIEmbeddings:
         """Single embeddings client reused for both chunking and storage."""
-        return OpenAIEmbeddings(model=EMBEDDING_MODEL)
+        return OpenAIEmbeddings(
+            model=EMBEDDING_MODEL,
+            dimensions=EMBEDDING_DIMENSIONS,
+        )
 
+    @traceable
     def create_vector_store(self, embeddings: OpenAIEmbeddings) -> PGVector:
         """Connect to the Postgres vector store using env-based credentials."""
         connection = (
@@ -137,24 +153,40 @@ class IngestionService:
             use_jsonb=True,
         )
 
+    @traceable
+    def add_documents_to_vector_store(
+        self,
+        vector_store: PGVector,
+        chunks: list[Document],
+    ) -> None:
+        vector_store.add_documents(chunks)
+
+    @traceable
     def ingest_file(self, file_path: str) -> int:
         """Load -> split -> embed -> store. Returns the number of chunks stored.
 
         This is the public entry point and keeps the same signature as before.
         """
+        parent_run = get_current_run_tree()
+        child_trace = {"parent": parent_run} if parent_run is not None else None
+
         print(f"Processing file: {file_path}")
 
-        documents = self.load_documents(file_path)
+        documents = self.load_documents(file_path, langsmith_extra=child_trace)
         if not documents:
             raise ValueError("No text found in document")
 
         # Reuse one embeddings client so semantic chunking and storage share it.
-        embeddings = self.create_embeddings()
+        embeddings = self.create_embeddings(langsmith_extra=child_trace)
 
         chunks = self.split_documents(
             documents=documents,
-            metadata=self.get_file_metadata(file_path),
+            metadata=self.get_file_metadata(
+                file_path,
+                langsmith_extra=child_trace,
+            ),
             embeddings=embeddings,
+            langsmith_extra=child_trace,
         )
         if not chunks:
             raise ValueError("No text found in document")
@@ -164,7 +196,15 @@ class IngestionService:
         print(f"Created {len(chunks)} chunks")
 
         # add_documents embeds each chunk and writes the vectors to Postgres.
-        self.create_vector_store(embeddings).add_documents(chunks)
+        vector_store = self.create_vector_store(
+            embeddings,
+            langsmith_extra=child_trace,
+        )
+        self.add_documents_to_vector_store(
+            vector_store,
+            chunks,
+            langsmith_extra=child_trace,
+        )
 
         print("Embeddings saved successfully")
 

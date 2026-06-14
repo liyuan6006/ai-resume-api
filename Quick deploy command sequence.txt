@@ -1,4 +1,0 @@
-docker build -t us-central1-docker.pkg.dev/enterprise-ai-platform-497117/resume-repo/resume-rag-ui:v2 .
-docker push us-central1-docker.pkg.dev/enterprise-ai-platform-497117/resume-repo/resume-rag-ui:v2
-
-kubectl set image deployment/resume-ui resume-ui=us-central1-docker.pkg.dev/enterprise-ai-platform-497117/resume-repo/resume-rag-ui:v2
