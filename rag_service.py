@@ -144,18 +144,16 @@ class RagService:
             embeddings=embeddings,
             collection_name=COLLECTION_NAME,
             connection=connection,
+            create_extension=False,
             use_jsonb=True,
             engine_args={
-                # Verify a pooled connection is alive before handing it out, so
-                # a silently-dropped (stale) socket gets replaced instead of
-                # causing a multi-minute hang on the next request.
                 "pool_pre_ping": True,
-                # Recycle connections older than 5 min — many proxies/DBs drop
-                # idle connections, so we retire them before they go stale.
                 "pool_recycle": 300,
                 "connect_args": {
-                    # Cap how long a single SQL statement may run server-side.
-                    "options": f"-c statement_timeout={DB_STATEMENT_TIMEOUT_MS}",
+                    "connect_timeout": 5,
+                    "options": (
+                        f"-c statement_timeout={DB_STATEMENT_TIMEOUT_MS}"
+                    ),
                 },
             },
         )
