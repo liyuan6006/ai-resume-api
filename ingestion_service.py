@@ -14,7 +14,7 @@ from langchain_postgres import PGVector
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langsmith import traceable
 from langsmith.run_helpers import get_current_run_tree
-
+from urllib.parse import quote_plus
 
 # --- Configuration -----------------------------------------------------------
 
@@ -137,19 +137,27 @@ class IngestionService:
             dimensions=EMBEDDING_DIMENSIONS,
         )
 
+
     @traceable
-    def create_vector_store(self, embeddings: OpenAIEmbeddings) -> PGVector:
-        """Connect to the Postgres vector store using env-based credentials."""
-        connection = (
+    def build_connection_string(self) -> str:
+        password = quote_plus(os.getenv("DB_PASSWORD"))
+
+        return (
             f"postgresql+psycopg://{os.getenv('DB_USER')}:"
-            f"{os.getenv('DB_PASSWORD')}@{os.getenv('DB_HOST')}:5432/"
+            f"{password}@{os.getenv('DB_HOST')}:5432/"
             f"{os.getenv('DB_NAME')}"
         )
+
+    @traceable
+    def create_vector_store(
+        self,
+        embeddings: OpenAIEmbeddings,
+    ) -> PGVector:
 
         return PGVector(
             embeddings=embeddings,
             collection_name=COLLECTION_NAME,
-            connection=connection,
+            connection=self.build_connection_string(),
             use_jsonb=True,
         )
 
